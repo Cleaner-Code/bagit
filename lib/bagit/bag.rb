@@ -62,7 +62,7 @@ module BagIt
         FileUtils.mkdir_p File.dirname(path)
 
         f = if src_path.nil?
-              File.open(path, "w") { |io| file_io_lambda(io) }
+              File.open(path, "w") { |io| file_io_lambda.call(io) }
             else
               FileUtils.cp src_path, path
             end
