@@ -20,6 +20,7 @@ module BagIt
     # Make a new Bag based at path
     def initialize(path, info = {}, _create = false)
       @bag_dir = path
+      @file_path_to_file_size = {}
       # make the dir structure if it doesn't exist
       FileUtils.mkdir bag_dir unless File.directory? bag_dir
       FileUtils.mkdir data_dir unless File.directory? data_dir
@@ -49,6 +50,25 @@ module BagIt
         end
       end
       files
+    end
+
+    def add_files(path_pairs) # HINT: [[relative_path, src_path, file_io_lambda]]
+      path_pair_size = path_pairs.size
+      path_pairs.each_with_index do |path_pair, index|
+        relative_path, src_path, file_io_lambda = path_pair
+        path = File.join(data_dir, relative_path)
+        raise "Bag file exists: #{relative_path}" if File.exist? path
+
+        FileUtils.mkdir_p File.dirname(path)
+
+        f = if src_path.nil?
+              File.open(path, "w") { |io| file_io_lambda(io) }
+            else
+              FileUtils.cp src_path, path
+            end
+        write_bag_info if (path_pair_size - 1) == index
+        f
+      end
     end
 
     # Add a bag file at the given path relative to data_dir
@@ -93,12 +113,11 @@ module BagIt
 
     # Get the Oxum for the payload files
     def payload_oxum
-      bytes = 0
-      bag_files.each do |f|
-        # TODO: filesystem quirks? Are we getting the stream size or the size on disk?
-        bytes += File.size(f)
+      bag_files.each_with_object(@file_path_to_file_size) do |file_path, hash|
+        hash[file_path] = File.size(file_path) unless hash.key?(file_path)
       end
-      bytes.to_s + "." + bag_files.count.to_s
+
+      "#{@file_path_to_file_size.values.inject(:+)}.#{bag_files.count}"
     end
 
     # Remove all empty directory trees from the bag
